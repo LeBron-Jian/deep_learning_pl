@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2022 JABIL
+Copyright (C) 2022 Jian
 
 '''
 import cv2

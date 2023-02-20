@@ -3,38 +3,32 @@ import os
 from os import listdir
 from pathlib import Path
 from PIL import Image
-import warnings
 import numpy as np
 
 from torch.utils.data import Dataset
 
-def open_img(path, mode=None):
-    """
-    In: 
-        path: img path
-        mode: one of [None, 'L', 'RGB']
-    Out:
-        img (np.ndarray)
-    """
+from deep_learning_pl.deep_learning_pl.utils import *
 
-
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', UserWarning)
-        warnings.simplefilter('ignore', Image.DecompressionBombWarning)
-        img = Image.open(path)
-        if mode and img.mode != mode:
-            img = img.convert(mode)
-    
-    return img
 
 class BasicDataset:
-    def __init__(self, images_dir, transform=None):
+    classes = {
+        "cat": 0,
+        "dog": 1
+    }
+
+    def __init__(
+            self,
+            images_dir,
+            image_size=(224, 224),
+            transform=None,
+    ):
         # initialize file path or list of file names
         assert images_dir is not None
 
         # 文件目录
         self.images_dir = images_dir
         self.imgs = os.listdir(self.images_dir)
+        self.image_size = image_size
         # 变换
         self.transform = transform
 
@@ -51,9 +45,9 @@ class BasicDataset:
             img = open_img(img)
             img = self.preprocess(img)
         if image_index[0].isupper():
-            label = 'dog'
+            label = self.classes['dog']
         else:
-            label = 'cat'
+            label = self.classes['cat']
         # 根据图片和标签创建字典
         sample = dict(image=img, label=label)
 
@@ -67,7 +61,7 @@ class BasicDataset:
         return len(self.imgs)
 
     def preprocess(cls, pil_img, is_mask=False):
-        pil_img = pil_img.resize((512, 512), resample=Image.NEAREST if is_mask else Image.BICUBIC)
+        pil_img = pil_img.resize(cls.image_size, resample=Image.NEAREST if is_mask else Image.BICUBIC)
         img_ndarray = np.asarray(pil_img)
         if len(img_ndarray.shape) == 2:
             img_ndarray = np.expand_dims(img_ndarray, axis=0)
@@ -77,8 +71,4 @@ class BasicDataset:
             img_ndarray = img_ndarray.transpose((2, 0, 1))
         if img_ndarray.max() > 1:
             img_ndarray = img_ndarray / 255
-        return img_ndarray
-    
-
-    
-
+        return img_ndarray.astype(np.float32)

@@ -1,13 +1,10 @@
-'''
-Copyright (C) 2022 Jian
-
-'''
 from functools import partial
 from typing import Tuple
 
 import timm
 import torch
 from torch import nn
+
 
 class _TimmBackbone(nn.Module):
 
@@ -59,8 +56,9 @@ if __name__ == "__main__":
     # for x in o:
     #     print(x.shape)
     
-    backbone, num_features = _fn_timm(model_name='resnet18', pretrained=True, num_classes=12)
+    backbone, num_features = _fn_timm(model_name='resnet18', pretrained=True, num_classes=10)
     print('===================')
     backbone.eval()
     res = backbone(torch.randn(2, 3, 224, 224))
     print('classifcation layer shape is ', res.shape)
+    # classifcation layer shape is  torch.Size([2, 512, 7, 7])

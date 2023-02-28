@@ -1,4 +1,4 @@
-from typing import Any, Optional, Union, Tuple
+from typing import Any, Optional, Union, Tuple, List
 from argparse import ArgumentParser
 from types import FunctionType
 
@@ -17,7 +17,7 @@ from .heads.linear import LinearHead
 
 class Classifier(pl.LightningModule):
     def __init__(self,
-                 label_list,
+                 label_list: List,
                  model_name: Union[str, Tuple[nn.Module, int]] = "resnet18",
                  pretrained: Union[bool, str] = True,
                  head: Union[str, FunctionType, nn.Module] = "linear",
@@ -53,46 +53,22 @@ class Classifier(pl.LightningModule):
         self.layer_3 = torch.nn.Linear(256, 10)
 
     def forward(self, x):
-        # forward function that is run when visualizing the graph
-        # 模型前向传递过程，主要是指val, test， 当然train也可以使用，保持代码统一
         x = self.model(x)
-        # probability distribution over labels
-        # x = F.log_softmax(x, dim=1)
-        # x = torch.flatten(x, 1)
         x = self.head(x)
         return x
 
     def label_convert_onehot(self, y):
         return F.one_hot(y)
 
-    def forward1(self, x):
-        batch_size, channels, width, height = x.size()
-
-        # (b, 1, 28, 28) -> (b, 1*28*28)
-        x = x.view(batch_size, -1)
-
-        # layer 1
-        x = self.layer_1(x)
-        x = torch.relu(x)
-
-        # layer 2
-        x = self.layer_2(x)
-        x = torch.relu(x)
-
-        # layer 3
-        x = self.layer_3(x)
-
-        # probability distribution over labels
-        x = torch.log_softmax(x, dim=1)
-        return x
-
     def cross_entropy_loss(self, logits, labels):
         # create loss function module
-        return F.nll_loss(logits, labels)
+        # F.nll_loss在函数内部不含有提前使用softmax转化的部分；
+        # return F.nll_loss(logits, labels)
+        # nn.CrossEntropyLoss内部先将输出使用softmax方式转化为概率的形式，后使用F.nll_loss函数计算交叉熵。
+        return nn.CrossEntropyLoss()(logits, labels)
 
     def training_step(self, train_batch, batch_idx):
         # 单次训练过程， 相当于训练过程中处理一个batch的内容
-        # x= train_batch['image']
         x, y = train_batch
         logits = self.forward(x)
         loss = self.cross_entropy_loss(logits, y)
@@ -100,25 +76,16 @@ class Classifier(pl.LightningModule):
         return loss
 
     def validation_step(self, val_batch, batch_idx):
-        # 单次验证过程，相当于验证过程中处理一个batch的内容
-        # x = val_batch['image']
-        # y = val_batch['label']
-        # y = self.label_convert_onehot(y)
         x, y = val_batch
         logits = self.forward(x)
         loss = self.cross_entropy_loss(logits, y)
         preds = torch.argmax(logits, dim=1)
         acc = accuracy(preds, y, num_classes=len(self.labelset))
-        # acc = accuracy(preds, y, self.task, num_classes=len(self.labelset))
-        # calling self.log will surface up scalars for you in tensorboard
         self.log('val_loss', loss, prog_bar=True)
         self.log('val_accuracy', acc, prog_bar=True)
         # return loss
 
     def test_step(self, test_batch, batch_idx):
-        # x = test_batch['image']
-        # y = test_batch['label']
-        # y = self.label_convert_onehot(y)
         x, y = test_batch
         logits = self(x)
         loss = self.cross_entropy_loss(logits, y)

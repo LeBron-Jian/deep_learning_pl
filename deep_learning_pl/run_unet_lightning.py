@@ -6,12 +6,11 @@ import torch
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 from PIL import Image
-from models.unet.model import UNet
+from .unet.model import UNet
 from torch.utils.data import DataLoader, Dataset
 
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import WandbLogger
-import wandb
+
 
 import random
 

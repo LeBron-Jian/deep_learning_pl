@@ -36,7 +36,7 @@ config = wandb.config
 
 class KITTI(Dataset):
     '''
-    Dataset Class for KITTI Semantic Segmentation Benchmark dataset
+    Dataset Class for KITTI Semantic segmentation Benchmark dataset
     Dataset link - http://www.cvlibs.net/datasets/kitti/eval_semseg.php?benchmark=semantics2015
 
     There are 34 classes in the given labels. However, not all of them are useful for training
@@ -132,7 +132,7 @@ class KITTI(Dataset):
 
 class SegModel(pl.LightningModule):
     '''
-    Semantic Segmentation Module
+    Semantic segmentation Module
 
     This is a basic semantic segmentation module implemented with Lightning.
     It uses CrossEntropyLoss as the default loss function. May be replaced with

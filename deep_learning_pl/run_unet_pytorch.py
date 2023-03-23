@@ -6,20 +6,15 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import wandb
 from torch import optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 
-from utils.data_loading import BasicDataset, CarvanaDataset
-from utils.dice_score import dice_loss
-from evaluate import evaluate
-from unet import UNet
-import segmentation_models_pytorch as smp
-
-dir_img = Path('/mnt/shared/users/jianwang/smp_data/images/')
-dir_mask = Path('/mnt/shared/users/jianwang/smp_data/annotations/trimaps/')
-dir_checkpoint = Path('/mnt/shared/users/jianwang/code/Pytorch-UNet-master/data/checkpoints/')
+from datasets.caravan_dataset import BasicDataset, CarvanaDataset
+from segmentation.losses.dice import dice_loss
+from segmentation.utils.evaluate import evaluate
+from segmentation.backbones.UNet_Series.Unet import UNet
+# import segmentation_models_pytorch as smp
 
 
 def train_net(net,
@@ -42,17 +37,12 @@ def train_net(net,
     n_train = len(dataset) - n_val
     train_set, val_set = random_split(dataset, [n_train, n_val], generator=torch.Generator().manual_seed(0))
 
-    # 3. Create data loaders
-    loader_args = dict(batch_size=batch_size, num_workers=4, pin_memory=True)
+    # 3. Create datasets loaders
+    loader_args = dict(batch_size=batch_size, num_workers=0, pin_memory=True)
     train_loader = DataLoader(train_set, shuffle=True, **loader_args)
     val_loader = DataLoader(val_set, shuffle=False, drop_last=True, **loader_args)
 
     # (Initialize logging)
-    experiment = wandb.init(project='U-Net', resume='allow', anonymous='must')
-    experiment.config.update(dict(epochs=epochs, batch_size=batch_size, learning_rate=learning_rate,
-                                  val_percent=val_percent, save_checkpoint=save_checkpoint, img_scale=img_scale,
-                                  amp=amp))
-
     logging.info(f'''Starting training:
         Epochs:          {epochs}
         Batch size:      {batch_size}
@@ -81,25 +71,28 @@ def train_net(net,
                 images = batch['image']
                 true_masks = batch['mask']
 
-                # assert images.shape[1] == net.n_channels, \
-                #     f'Network has been defined with {net.n_channels} input channels, ' \
-                #     f'but loaded images have {images.shape[1]} channels. Please check that ' \
-                #     'the images are loaded correctly.'
+                assert images.shape[1] == net.n_channels, \
+                    f'Network has been defined with {net.n_channels} input channels, ' \
+                    f'but loaded images have {images.shape[1]} channels. Please check that ' \
+                    'the images are loaded correctly.'
 
-                images = images.to(device=device, dtype=torch.float32)
+                images = images.to(device=device, dtype=torch.float32, memory_format=torch.channels_last)
                 true_masks = true_masks.to(device=device, dtype=torch.long)
 
-                with torch.cuda.amp.autocast(enabled=amp):
+                with torch.autocast(device.type if device.type != 'mps' else 'cpu', enabled=amp):
                     masks_pred = net(images)
-                    true_masks = F.one_hot(true_masks.squeeze_(1), 2).permute(0, 3, 1, 2).float()
-                    # print(masks_pred)
-                    # print(true_masks)
-                    # print(type(masks_pred), type(true_masks))
+                    if net.n_classes == 1:
+                        loss = criterion(masks_pred.squeeze(1), true_masks.float())
+                        loss += dice_loss(F.sigmoid(masks_pred.squeeze(1)), true_masks.float(), multiclass=False)
+                    else:
+                        loss = criterion(masks_pred, true_masks)
+                        # true_masks = F.one_hot(true_masks.squeeze_(1), 2).permute(0, 3, 1, 2).float()
+                        # print(masks_pred.shape, true_masks.shape)
+                        # # torch.Size([4, 1, 320, 479]) torch.Size([4, 2, 320, 479])
 
-                    loss = criterion(masks_pred, true_masks) \
-                           + dice_loss(F.softmax(masks_pred, dim=1).float(),
-                                       true_masks,
-                                       multiclass=True)
+                        loss += dice_loss(F.softmax(masks_pred, dim=1).float(),
+                                          F.one_hot(true_masks, net.n_classes).permute(0, 3, 1, 2).float(),
+                                          multiclass=True)
                 optimizer.zero_grad(set_to_none=True)
                 grad_scaler.scale(loss).backward()
                 grad_scaler.step(optimizer)
@@ -108,38 +101,15 @@ def train_net(net,
                 pbar.update(images.shape[0])
                 global_step += 1
                 epoch_loss += loss.item()
-                experiment.log({
-                    'train loss': loss.item(),
-                    'step': global_step,
-                    'epoch': epoch
-                })
                 pbar.set_postfix(**{'loss (batch)': loss.item()})
 
                 # Evaluation round
                 division_step = (n_train // (1 * batch_size))
                 if division_step > 0:
                     if global_step % division_step == 0:
-                        histograms = {}
-                        # for tag, value in net.named_parameters():
-                        #     tag = tag.replace('/', '.')
-                        #     histograms['Weights/' + tag] = wandb.Histogram(value.data.cpu())
-                        #     histograms['Gradients/' + tag] = wandb.Histogram(value.grad.data.cpu())
-
                         val_score = evaluate(net, val_loader, device)
                         scheduler.step(val_score)
                         logging.info('Validation Dice score: {}'.format(val_score))
-                        experiment.log({
-                            'learning rate': optimizer.param_groups[0]['lr'],
-                            'validation Dice': val_score,
-                            'images': wandb.Image(images[0].cpu()),
-                            'masks': {
-                                'true': wandb.Image(true_masks[0].float().cpu()),
-                                'pred': wandb.Image(torch.softmax(masks_pred, dim=1).argmax(dim=1)[0].float().cpu()),
-                            },
-                            'step': global_step,
-                            'epoch': epoch,
-                            **histograms
-                        })
 
         if save_checkpoint:
             Path(dir_checkpoint).mkdir(parents=True, exist_ok=True)
@@ -147,49 +117,38 @@ def train_net(net,
             logging.info(f'Checkpoint {epoch + 1} saved!')
 
 
-def get_args():
-    parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
-    parser.add_argument('--epochs', '-e', metavar='E', type=int, default=150, help='Number of epochs')
-    parser.add_argument('--batch-size', '-b', dest='batch_size', metavar='B', type=int, default=8, help='Batch size')
-    parser.add_argument('--learning-rate', '-l', metavar='LR', type=float, default=0.0001,
-                        help='Learning rate', dest='lr')
-    parser.add_argument('--load', '-f', type=str, default=False, help='Load model from a .pth file')
-    parser.add_argument('--scale', '-s', type=float, default=0.5, help='Downscaling factor of the images')
-    parser.add_argument('--validation', '-v', dest='val', type=float, default=10.0,
-                        help='Percent of the data that is used as validation (0-100)')
-    parser.add_argument('--amp', action='store_true', default=False, help='Use mixed precision')
-
-    return parser.parse_args()
-
-
 if __name__ == '__main__':
-    args = get_args()
+    load_path = None
+    dir_img = Path(r'D:\Desktop\workdata\public\code_paper\Pytorch-UNet-master\data/imgs/')
+    dir_mask = Path(r'D:\Desktop\workdata\public\code_paper\Pytorch-UNet-master\data/masks/')
+    dir_checkpoint = Path('/mnt/shared/users/jianwang/code/Pytorch-UNet-master/datasets/checkpoints/')
 
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    net = smp.UnetPlusPlus(
-        encoder_name="resnet18",  # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
-        encoder_weights='imagenet',  # use `imagenet` pretreined weights for encoder initialization
-        in_channels=3,  # model input channels (1 for grayscale images, 3 for RGB, etc.)
-        classes=2,  # model output channels (number of classes in your dataset)
-    )
+    # net = smp.UnetPlusPlus(
+    #     encoder_name="resnet18",  # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
+    #     encoder_weights='imagenet',  # use `imagenet` pretreined weights for encoder initialization
+    #     in_channels=3,  # model input channels (1 for grayscale images, 3 for RGB, etc.)
+    #     classes=2,  # model output channels (number of classes in your dataset)
+    # )
+    net = UNet(n_channels=3, n_classes=1)
 
-    if args.load:
-        net.load_state_dict(torch.load(args.load, map_location=device))
-        logging.info(f'Model loaded from {args.load}')
+    if load_path is not None:
+        net.load_state_dict(torch.load(load_path, map_location=device))
+        logging.info(f'Model loaded from {load_path}')
 
     net.to(device=device)
     try:
         train_net(net=net,
-                  epochs=args.epochs,
-                  batch_size=args.batch_size,
-                  learning_rate=args.lr,
+                  epochs=10,
+                  batch_size=2,
+                  learning_rate=1e-5,
                   device=device,
-                  img_scale=args.scale,
-                  val_percent=args.val / 100,
-                  amp=args.amp)
+                  img_scale=0.25,
+                  val_percent=0.5,
+                  amp=False)
     except KeyboardInterrupt:
         torch.save(net.state_dict(), 'INTERRUPTED.pth')
         logging.info('Saved interrupt')

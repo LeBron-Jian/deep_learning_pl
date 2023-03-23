@@ -4,7 +4,7 @@ import torch
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, random_split
 
-from data.dataset import BasicDataset
+from datasets.dataset import BasicDataset
 from classification import Classifier
 
 root = r'D:\workdata\data\smp_data\OxfordPet\images'
@@ -24,7 +24,7 @@ n_train = len(dataset) - n_val
 train_set, val_set = random_split(dataset, [n_train, n_val], generator=torch.Generator().manual_seed(0))
 
 
-# 3. Create data loaders
+# 3. Create datasets loaders
 n_cpu = os.cpu_count()
 train_dataloader = DataLoader(dataset, batch_size=8, shuffle=True, num_workers=0) # num_workers=n_cpu
 val_dataloader = DataLoader(dataset, batch_size=8, shuffle=False, num_workers=0)
@@ -65,5 +65,5 @@ trainer = pl.Trainer(
 trainer.fit(model, train_dataloader, val_dataloader)
 # save trained model
 # torch.save(model.state_dict(), config.MODEL_NAME)
-# # test on test data
+# # test on test datasets
 # trainer.test(model)

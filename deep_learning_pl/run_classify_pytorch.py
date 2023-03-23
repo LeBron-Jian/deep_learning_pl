@@ -15,12 +15,12 @@ transform = transforms.Compose(
      ])
 batch_size = 64
 # Data set
-train_dataset = torchvision.datasets.MNIST(root='./data',
+train_dataset = torchvision.datasets.MNIST(root='./datasets',
                                            train=True,
                                            transform=transforms.ToTensor(),
                                            download=True)
 
-test_dataset = torchvision.datasets.MNIST(root='./data',
+test_dataset = torchvision.datasets.MNIST(root='./datasets',
                                           train=False,
                                           transform=transforms.ToTensor())
 

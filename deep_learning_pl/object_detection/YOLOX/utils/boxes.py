@@ -104,7 +104,7 @@ def bboxes_iou(bboxes_a, bboxes_b, xyxy=True):
 
 def matrix_iou(a, b):
     """
-    return iou of a and b, numpy version for data augenmentation
+    return iou of a and b, numpy version for datasets augenmentation
     """
     lt = np.maximum(a[:, np.newaxis, :2], b[:, :2])
     rb = np.minimum(a[:, np.newaxis, 2:], b[:, 2:])

@@ -1,7 +1,7 @@
 import torch
 
-# from torch.utils.data import SequentialSampler
-# from torch.utils.data.sampler import (
+# from torch.utils.datasets import SequentialSampler
+# from torch.utils.datasets.sampler import (
 #     BatchSampler,
 #     RandomSampler,
 #     Sampler,
@@ -10,7 +10,7 @@ import torch
 #     WeightedRandomSampler,
 # )
 """
-torch.utils.data.Dataset是代表这一数据的抽象类（也就是基类）。
+torch.utils.datasets.Dataset是代表这一数据的抽象类（也就是基类）。
 我们可以通过继承和重写这个抽象类实现自己的数据类，只需要定义__len__和__getitem__这个两个函数。
 
 DataLoader是Pytorch中用来处理模型输入数据的一个工具类。
@@ -114,7 +114,7 @@ class SequentialSampler(Sampler):
 """
 usage sample:
 a = [1,5,78,9,68]
-b = torch.utils.data.SequentialSampler(a)
+b = torch.utils.datasets.SequentialSampler(a)
 for x in b:
     print(x)
 
@@ -191,8 +191,8 @@ class SubsetRandomSampler(Sampler):
 n_train = len(train_dataset)
 split = n_train // 3
 indices = random.shuffle(list(range(n_train)))
-train_sampler = torch.utils.data.sampler.SubsetRandomSampler(indices[split:])
-valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(indices[:split])
+train_sampler = torch.utils.datasets.sampler.SubsetRandomSampler(indices[split:])
+valid_sampler = torch.utils.datasets.sampler.SubsetRandomSampler(indices[:split])
 train_loader = DataLoader(..., sampler=train_sampler, ...)
 valid_loader = DataLoader(..., sampler=valid_sampler, ...)
 """
@@ -217,7 +217,7 @@ class BatchSampler(Sampler):
     def __init__(self, sampler, batch_size, drop_last):
         if not isinstance(sampler, Sampler):
             raise ValueError("sampler should be an instance of "
-                             "torch.utils.data.Sampler, but got sampler={}"
+                             "torch.utils.datasets.Sampler, but got sampler={}"
                              .format(sampler))
         if not isinstance(batch_size, _int_classes) or isinstance(batch_size, bool) or \
                 batch_size <= 0:

@@ -720,7 +720,7 @@ class UNet3Plus_DeepSup_CGM(nn.Module):
         h5 = self.maxpool4(h4)
         hd5 = self.conv5(h5)  # h5->20*20*1024
 
-        # -------------Classification-------------
+        # -------------classification-------------
         cls_branch = self.cls(hd5).squeeze(3).squeeze(2)  # (B,N,1,1)->(B,N)
         cls_branch_max = cls_branch.argmax(dim=1)
         cls_branch_max = cls_branch_max[:, np.newaxis].float()

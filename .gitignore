@@ -20,6 +20,7 @@ docs/api
 *.onnx
 *.engine
 events.out.tfevents*
+lightning_logs/
 
 # Environments
 .env

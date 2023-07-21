@@ -28,7 +28,6 @@ class Caltech101Dataset(VisionDataset):
         self.categories = sorted(os.listdir(os.path.join(self.root, "101_ObjectCategories")))
         self.categories.remove("BACKGROUND_Google")  # this is not a real class
 
-
         # For some reason, the category names in "101_ObjectCategories" and
         # "Annotations" do not always match. This is a manual map between the
         # two. Defaults to using same name, since most names are fine.
@@ -63,7 +62,7 @@ class Caltech101Dataset(VisionDataset):
                 self.categories[self.y[index]],
                 f"image_{self.index[index]:04d}.jpg",
             )
-        )
+        ).convert("RGB")
 
         target: Any = []
         for t in self.target_type:

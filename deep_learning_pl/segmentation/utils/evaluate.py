@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-
+from imgaug.augmentables import ia
 from ..losses.dice import multiclass_dice_coeff, dice_coeff
 
 
@@ -24,11 +24,11 @@ def evaluate(net, dataloader, device):
             # convert to one-hot format
             if num_classes == 1:
                 mask_pred = (F.sigmoid(mask_pred) > 0.5).float()
-                    # compute the Dice score
+                # compute the Dice score
                 dice_score += dice_coeff(mask_pred, mask_true, reduce_batch_first=False)
             else:
                 mask_pred = F.one_hot(mask_pred.argmax(dim=1), 2).permute(0, 3, 1, 2).float()
-                    # compute the Dice score, ignoring background
+                # compute the Dice score, ignoring background
                 dice_score += multiclass_dice_coeff(mask_pred[:, 1:, ...], mask_true[:, 1:, ...],
                                                     reduce_batch_first=False)
 

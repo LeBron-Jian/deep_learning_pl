@@ -94,6 +94,12 @@ def wide_resnet101_2(arch, pretrained=False, progress=True, **kwargs):
                    pretrained, progress, **kwargs)
 
 
-# Wide_ResNet101_2_Weights.IMAGENET1K_V1
-print(summary(wide_resnet101_2("Wide_ResNet101_2_Weights.IMAGENET1K_V2").cuda(), (3, 512, 512)))
-
+if __name__ == "__main__":
+    # Wide_ResNet101_2_Weights.IMAGENET1K_V1
+    # print(summary(wide_resnet101_2("Wide_ResNet101_2_Weights.IMAGENET1K_V2").cuda(), (3, 512, 512)))
+    def load_pretrain(self):
+        self.pretrain = wide_resnet101_2(self.wide_resnet_101_arch, pretrained=True)
+        # self.pretrain.load_state_dict(torch.load('pretrained_model.pth'))
+        self.pretrain.eval()
+        self.pretrain = self.pretrain.cuda()
+        # print(summary(self.pretrain, (3, 512, 512)))

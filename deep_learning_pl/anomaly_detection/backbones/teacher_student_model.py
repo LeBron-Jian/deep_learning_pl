@@ -20,6 +20,7 @@ class PDN_S(nn.Module):
     def __init__(self, last_kernel_size=384, with_bn=False, *args, **kwargs) -> None:
         super().__init__()
         # FIXME  input 3???  in_channels=3, out_channels=128
+        self.with_bn = with_bn
         self.conv1 = nn.Conv2d(3, 128, kernel_size=4, stride=1, padding=3)
         self.conv2 = nn.Conv2d(128, 256, kernel_size=4, stride=1, padding=3)
         self.conv3 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)

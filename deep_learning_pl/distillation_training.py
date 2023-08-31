@@ -3,10 +3,10 @@ import torch.nn.functional as F
 import os
 # import WideResNet-101 from timm
 # from timm.models.wide_resnet import WideResNet
-from ..datasets.ImageNet_data import ImageNetDataset, load_infinite
+from datasets.ImageNet_data import ImageNetDataset, load_infinite
 from torch.utils.data import DataLoader
-from .backbones.teacher_student_model import Teacher
-from .backbones.wider_resnet101 import wide_resnet101_2
+from anomaly_detection.backbones.teacher_student_model import Teacher
+from anomaly_detection.backbones.wider_resnet101 import wide_resnet101_2
 import tqdm
 from torchvision import transforms
 
@@ -88,13 +88,19 @@ class DistillationTraining(object):
         num = 0
         input_data = torch.randn(1, 3, self.resize, self.resize).cuda()
         temp_tensor = self.pretrain(input_data)
-        x = torch.zeros((500, self.channel_size, *temp_tensor.shape[2:]))
+        x = torch.zeros((512, self.channel_size, *temp_tensor.shape[2:]))
         for item in tqdm.tqdm(dataloader):
-            if num >= 500:
+            if num >= 512:
                 break
             ldist = item['image'].cuda()
             y = self.pretrain(ldist).detach().cpu()
             yb = y.shape[0]
+            print("yb ===> ", yb)
+            print("y ===> ", y.shape)
+            print("x ===> ", x.shape)
+            print("num ===> ", num)
+            a = x[num:num + yb, :, :, :]
+            print("a ===> ", a.shape)
             x[num:num + yb, :, :, :] = y[:, :, :, :]
             num += yb
         channel_mean = x[:num, :, :, :].mean(dim=(0, 2, 3), keepdim=True).cuda()
@@ -122,7 +128,7 @@ class DistillationTraining(object):
         imagenet_dataset = ImageNetDataset(self.imagenet_dir, self.data_transforms)
         dataloader = DataLoader(imagenet_dataset, batch_size=self.batch_size, shuffle=True, num_workers=4,
                                 pin_memory=True)
-        dataloader = load_infinite(dataloader)
+        dataloader0 = load_infinite(dataloader)
         teacher = Teacher(self.model_size)
         teacher = teacher.cuda()
         # mean_param_path = '{}/imagenet_channel_std.pth'.format(self.save_path)
@@ -131,21 +137,21 @@ class DistillationTraining(object):
         #     self.mean = mean_param['mean'].cuda()
         #     self.std = mean_param['std'].cuda()
         # else:
-        self.mean, self.std = self.global_channel_normalize(dataloader)
+        self.mean, self.std = self.global_channel_normalize(dataloader0)
         # torch.save({
         #     'mean': self.mean,
         #     'std': self.std
         # }, '{}/imagenet_channel_std.pth'.format(self.save_path))
         optimizer = torch.optim.Adam(teacher.parameters(), lr=0.0001, weight_decay=0.00001)
         scheduler = torch.optim.lr_scheduler.StepLR(
-            optimizer, step_size=int(0.95 * self.train_iter), gamma=0.1)
+            optimizer, step_size=int(0.95 * self.normalize_iter), gamma=0.1)
         best_loss = 1000
         loss_accum = 0
         iteration = 0
-        print('start train iter:{}'.format(self.train_iter))
+        print('start train iter:{}'.format(self.normalize_iter))
         for iteration in range(self.iteration):
             # for batch_index, batch_sample in enumerate():
-            batch_sample = next(dataloader).cuda()
+            batch_sample = next(dataloader0)  # .cuda()
             teacher.train()
             optimizer.zero_grad()
             loss = self.compute_mse_loss(teacher, batch_sample)
@@ -171,16 +177,34 @@ class DistillationTraining(object):
 
 
 if __name__ == '__main__':
-    imagenet_dir = r'J:\dataset\public\ImageNet'
+    # imagenet_dir = r'J:\dataset\public\ImageNet\train'
+    imagenet_dir = r'D:\workdata\data\caltech-101\caltech-101\101_ObjectCategories'
     channel_size = 384
     save_path = './ckptSmall'
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     distillation_training = DistillationTraining(
         imagenet_dir, channel_size, 16, save_path,
-        normalize_iter=500,
+        normalize_iter=512,
         model_size='S',
         iteration=10000,
         wide_resnet_101_arch="Wide_ResNet101_2_Weights.IMAGENET1K_V2",
     )
     distillation_training.train()
+
+    # # self.load_pretrain()
+    # data_transforms = transforms.Compose([
+    #     transforms.Resize((512, 512), ),
+    #     transforms.RandomGrayscale(p=0.1),
+    #     # 6: Convert Idist to gray scale with a probability of 0.1 and 18: Convert Idist to gray scale with a probability of 0.1
+    #     transforms.ToTensor(),
+    # ])
+    # imagenet_dataset = ImageNetDataset(imagenet_dir, data_transforms)
+    # dataloader = DataLoader(imagenet_dataset, batch_size=16, shuffle=True, num_workers=4,
+    #                         pin_memory=True)
+    # dataloader1 = load_infinite(dataloader)
+    # print(len(imagenet_dataset))
+    # for item in tqdm.tqdm(dataloader, desc='Computing mean of features'):
+    #     ldist = item['image'].cuda()
+    #     print(ldist)
+    #     break
